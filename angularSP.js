@@ -17,12 +17,14 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
         '$rootScope',
         '$timeout',
         "AngularSPHelper",
+        "ngXmlToJson",
         function(
             $http,
             $compile,
             $rootScope,
             $timeout,
-            AngularSPHelper
+            AngularSPHelper,
+            ngXmlToJson
         ) {
             // Begin SPServices code http://spservices.codeplex.com/ (minor modifications)
             var SLASH                   = "/",
@@ -690,12 +692,15 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
                             } else {
                                 SOAPEnvelope.payload.push("<updates><Batch OnError='Continue'><Method ID='1' Cmd='", opt.batchCmd, "'>");
                                 for (i=0; i < opt.valuepairs.length; i++) { 
-                                    SOAPEnvelope.payload.push("<Field Name='", opt.valuepairs[i][0], "'>", escapeColumnValue(opt.valuepairs[i][1]), "</Field>");
+                                    // escapeColumnValue is undefined
+                                    //SOAPEnvelope.payload.push("<Field Name='", opt.valuepairs[i][0], "'>", escapeColumnValue(opt.valuepairs[i][1]), "</Field>");
+                                    SOAPEnvelope.payload.push("<Field Name='", opt.valuepairs[i][0], "'>", opt.valuepairs[i][1], "</Field>");
                                 }
                                 if(opt.batchCmd !== "New") {
                                     SOAPEnvelope.payload.push("<Field Name='ID'>", opt.ID, "</Field>");
                                 }
                                 SOAPEnvelope.payload.push("</Method></Batch></updates>");
+				SOAPAction = ["http://schemas.microsoft.com/sharepoint/soap/UpdateListItems"];
                             }
                             break;
 
@@ -1322,6 +1327,13 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
                     }
 
                     // End SPServices code http://spservices.codeplex.com/
+                    
+                    // Get headers before promise
+        		    var headers = [];
+        		    headers["Content-Type"] = "text/xml;charset='utf-8'";
+        		    headers["Accept"] = "application/xml, text/xml, */*; q=0.01";
+        		    headers["X-Requested-With"] = "XMLHttpRequest";
+        		    headers["SOAPAction"] = SOAPAction.join('');
 
                     // Glue together the pieces of the SOAP message
                     var msg = [
@@ -1336,9 +1348,7 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
                             url: ajaxURL.join(''),
                             data: msg,
                             responseType: "document",
-                            headers: {
-                                "Content-Type": "text/xml;charset='utf-8'"
-                            },
+                            headers: headers,
                             transformRequest: function(data, headersGetter) {
                                 if (WSops[opt.operation][1]) {
                                     var headers = headersGetter();
@@ -1348,24 +1358,29 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
                             },
                             transformResponse: function(data, headersGetter) {
                                 if (data) {
-                                    var ret = xmlToJSON(
+                                    // using ngXmlToJson since XmlToJson is undefined
+                                    var ret = ngXmlToJson.convertXmlToJson(
                                         data,
                                         {
                                             regex: /ows_/,
                                             regexReplacement: ""
                                         }
-                                    )["soap:Envelope"]["soap:Body"];
-
-                                    return _.reduce(
+                                    );
+									
+									value = ret["soap:Envelope"]["soap:Body"];
+									
+									return _.reduce(
                                         AngularSPHelper.comb[opt.operation.toLowerCase()],
                                         function(memo, item) {
                                             return memo[item];
                                         },
-                                        ret
+                                        value
                                     );
                                 }
                             }
                         });
+                        
+                    console.log(msg);
 
                     if (angular.isFunction(opt.completefunc)) {
                         promise.success(opt.completefunc);
@@ -1380,51 +1395,6 @@ angular.module("AngularSP", ["AngularSPHelper"]).factory(
 
                     return promise;
                 };
-/*
-                scope.opt = {};
-                scope.opt.Ids = ["asd","asdf","ghdf","ytu"];
-                scope.httpHeaders = {};
-
-                scope.opt.Url = "ssdfsdf";
-                scope.opt.Fields = "sdfsdfsdfsdf";
-                scope.opt.Stream = "streeeeeam";
-
-                scope.opt.listName = "1234564-123-235-223";
-                scope.opt.batchCmd = "New";
-                scope.opt.valuepairs = [
-                    ["blah1", "blah1Value"],
-                    ["blah2", "blah2Value"],
-                    ["blah3", "blah3Value"]
-                ];
-
-                this.testMe = function(operation) {
-                    var t = ["<soap:Envelope xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:xsd='http://www.w3.org/2001/XMLSchema' xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/'><soap:Body><", SPServicesEndpoints.convertFromCamelCase(operation), "/></soap:Body></soap:Envelope>"].join('');
-
-scope.endPoint = "";
-
-                    var k = $compile(t)(scope);
-
-                    setTimeout(function() {
-                        var t2 = angular.element("<p></p>");
-                        t2.append(k);
-console.log("t2.html", t2);
-console.log("t", t);
-console.log("k", k);
-                        $http({
-                            method: 'POST',
-                            url: '/',
-                            data: t2.html(),
-                            responseType: "document",
-                            headers: {
-                                "Content-Type": "text/xml;charset='utf-8'"
-                            }
-                        });
-                    }, 1);
-
-                    //return k;
-                    
-                }*/
-
             };
         }
     ]
